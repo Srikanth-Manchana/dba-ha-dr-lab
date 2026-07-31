@@ -1,0 +1,5 @@
+azure_subscription_id = "<your-azure-subscription-id>"
+azure_region           = "westus2"
+oci_tenancy_ocid        = "<your-oci-tenancy-ocid>"
+oci_region              = "<your-oci-home-region>"
+admin_password          = "<set-a-strong-password-do-not-commit-the-real-one>"

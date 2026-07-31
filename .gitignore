@@ -1,0 +1,13 @@
+# --- secrets: never commit any of these ---
+*.tfvars
+!*.tfvars.example
+.oci/
+*.pem
+*.ppk
+*_rsa
+*_rsa.pub
+.env
+dba-lab.env
+**/terraform.tfstate
+**/terraform.tfstate.backup
+**/.terraform/
