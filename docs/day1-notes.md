@@ -175,3 +175,9 @@ whichever node is currently primary.
 - **Re-running a long, multi-step provisioning script after a partial failure
   produces misleading "already exists" noise** — always check actual current
   state before treating a script's exit code as ground truth.
+
+## Day 2 environment note
+Day 2 uses a single standalone VM (SQL01, no domain, no cluster) since Extended
+Events / Query Store / Resource Governor / SSRS / SSIS / backup-restore don't
+require Always-On infrastructure. SQL Server auth (sa) used instead of Windows
+auth, since there's no domain here.
