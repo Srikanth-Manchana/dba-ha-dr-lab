@@ -155,7 +155,7 @@ DBALAB-AG01   SQL02   SECONDARY   HEALTHY
 Listener `DBALAB-AG01-L.dbalab.local` resolves to `10.10.1.30` and routes to
 whichever node is currently primary.
 
-## Takeaways worth remembering for an interview
+## Takeaways worth remembering
 
 - **"Access denied" / "connection not active" errors during AG setup can stack
   across three independent layers** — cloud-level NSG, OS-level Windows
