@@ -178,3 +178,41 @@ distinction to be able to make: an index fixes a bad access-path problem
 (scan vs. seek), but it does not make transmitting a large result set to the
 client instantaneous — those are two separate costs, and conflating them
 would lead to an incorrect read of "the index didn't really help."
+
+### 6. SSIS package: retry-wrapped loop did not actually retry on failure
+Built a package (`scripts/ssis/day2/Package.dtsx`) with an Execute SQL Task
+(truncate staging) feeding a For Loop Container wrapping a Data Flow Task
+(OLE DB Source -> Derived Column -> OLE DB Destination), plus an OnError
+event handler logging to `staging.SSIS_ErrorLog`.
+
+First failure encountered was a validation-time error (renamed the
+destination table to simulate an outage) — this never reached the retry
+loop or error handler at all, since SSIS validates object existence before
+execution begins. Switched to a genuine runtime failure instead: added a
+temporary CHECK constraint (`Region <> 'RGN-12'`) that some source rows
+violate, forcing a mid-execution failure.
+
+Result: the package failed after a single attempt, not three. Root cause,
+found via the detailed Output log:
+- `MaximumErrorCount` on the Data Flow Task was set to 1, not the intended 3.
+- More fundamentally, wrapping a task in a `For Loop Container` does not by
+  itself implement retry-on-failure — it only controls how many times the
+  loop iterates. A task failure inside a container propagates upward and
+  stops the container immediately by default; actually retrying requires
+  explicitly telling the failed task not to propagate its failure (e.g.
+  `FailParentOnFailure = False`) combined with loop logic that continues on
+  failure rather than exiting.
+
+The OnError handler itself worked correctly once properly configured
+(Parameter Mapping tab, mapping `System::ErrorDescription` and
+`System::SourceName` to the logging Execute SQL Task's parameters) — it
+captured three real, distinct error events per failed run, showing the
+actual cascade: the SQL Server CHECK constraint violation, then two layers
+of SSIS pipeline error propagation reacting to it.
+
+Lesson: a container that visually looks like retry logic (a loop wrapped
+around a task, with a MaximumErrorCount property set) is not automatically
+retry-on-failure logic. The two need to be explicitly connected, and the
+only way this gap was caught was by forcing a real failure and reading the
+actual execution log rather than assuming a successful design-time build
+meant the intended behavior was in place.
