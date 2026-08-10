@@ -216,3 +216,48 @@ retry-on-failure logic. The two need to be explicitly connected, and the
 only way this gap was caught was by forcing a real failure and reading the
 actual execution log rather than assuming a successful design-time build
 meant the intended behavior was in place.
+
+### 7. Backup/restore to Azure Blob Storage: two provider/syntax gotchas
+Storage account creation initially failed with:
+```
+(SubscriptionNotFound) Subscription <id> was not found.
+```
+despite `az account show` and `az group list` both confirming the
+subscription and resource group were valid and accessible. Root cause:
+`Microsoft.Storage` was not a registered resource provider on this
+subscription — brand-new subscriptions only have a small default set of
+providers registered, and Azure's error message for "provider not
+registered" can surface as this same misleading "SubscriptionNotFound" text
+rather than a clearer message. Fixed with:
+```bash
+az provider register --namespace Microsoft.Storage
+# wait for: az provider show --namespace Microsoft.Storage --query registrationState -o tsv
+# to return "Registered" before retrying
+```
+
+Separately, the initial `RESTORE DATABASE ... WITH CREDENTIAL = '<url>', ...`
+failed with:
+```
+Msg 3225: Use of WITH CREDENTIAL syntax is not valid for credentials
+containing a Shared Access Signature.
+```
+`WITH CREDENTIAL` in a `RESTORE` statement is only valid for the older
+Storage Account Key credential type. For a SAS-based credential (created via
+`CREATE CREDENTIAL ... WITH IDENTITY = 'SHARED ACCESS SIGNATURE'`), SQL
+Server resolves the correct credential automatically by matching the blob
+URL against `sys.credentials` — the clause must be omitted entirely, not
+just referenced differently.
+
+Also hit an Azure CLI MFA/token-expiry issue mid-session (same class of
+issue as Day 0/2's earlier `AADSTS50076` errors) — resolved the same way,
+via `az logout` then `az login --tenant <tenant-id> --scope
+https://management.core.windows.net//.default`.
+
+## What actually worked, end to end
+
+Backup: 441,034 pages (~3.4GB) written directly to Azure Blob Storage via
+`BACKUP DATABASE ... TO URL`, no local disk involved, 20.7 seconds at 166.6
+MB/sec with COMPRESSION and CHECKSUM. Restore into a differently-named
+database (`DBALAB_PerfLab_Restored`), verified by an exact row-count match
+against the original (6,922,161 on both) — the actual proof a restore drill
+needs, not just a completion message.
